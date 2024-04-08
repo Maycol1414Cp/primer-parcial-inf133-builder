@@ -1,55 +1,60 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 
-# problema con 
-class personaje:
-    def __init__(self):
-        self.id = None
-        self.name = None
-        self.level = None
-        self.role = None
-        self.charisma = None
-        self.strength = None
-        self.dexterity = None
-    def __str__(self):
-        return f'{self.id} {self.name} {self.level} {self.role} {self.charisma} {self.strength} {self.dexterity}'
-# builder
-class personajeBuilder:
-    def __init__(self):
-        self.personaje = personaje()
-    def setId(self, id):
-        self.personaje.id = id
-        return self
-    def setName(self, name):
-        self.personaje.name = name
-        return self
-    def setLevel(self, level):
-        self.personaje.level = level
-        return self
-    def setRole(self, role):
-        self.personaje.role = role
-        return self
-    def setCharisma(self, charisma):
-        self.personaje.charisma = charisma
-        return self
-    def setStrength(self, strength):
-        self.personaje.strength = strength
-        return self
-    def setDexterity(self, dexterity):
-        self.personaje.dexterity = dexterity
-        return self
-    def build(self):
-        return self.personaje
-# director
-class personajeDirector:
-    def __init__(self):
-        self.builder = personajeBuilder()
-    def createPersonaje(self, id, name, level, role, charisma, strength, dexterity):
-        return self.builder.setId(id).setName(name).setLevel(level).setRole(role).setCharisma(charisma).setStrength(strength).setDexterity(dexterity).build()
-class RequestHandler(BaseHTTPRequestHandler):
+# This will store our RPG characters data
+characters = {}
+
+class RPGCharacterHandler(BaseHTTPRequestHandler):
     def _send_response(self, message, status=200):
         self.send_response(status)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
         self.wfile.write(bytes(json.dumps(message), "utf8"))
-    
+
+    def do_GET(self):
+        if self.path == '/characters':
+            self._send_response(characters)
+        elif self.path.startswith('/characters/'):
+            id = int(self.path.split('/')[-1])
+            if id in characters:
+                self._send_response(characters[id])
+            else:
+                self._send_response({'error': 'Character not found'}, 404)
+
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        character = json.loads(post_data)
+        
+        # Generate a new id for the character
+        new_id = max(characters.keys(), default=0) + 1
+        characters[new_id] = character
+
+        self._send_response(character)
+
+    def do_PUT(self):
+        id = int(self.path.split('/')[-1])
+        if id in characters:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            updated_data = json.loads(post_data)
+            characters[id].update(updated_data)
+            self._send_response(characters[id])
+        else:
+            self._send_response({'error': 'Character not found'}, 404)
+
+    def do_DELETE(self):
+        id = int(self.path.split('/')[-1])
+        if id in characters:
+            del characters[id]
+            self._send_response({'message': 'Character deleted'})
+        else:
+            self._send_response({'error': 'Character not found'}, 404)
+
+def run(server_class=HTTPServer, handler_class=RPGCharacterHandler):
+    server_address = ('', 8000)
+    httpd = server_class(server_address, handler_class)
+    print('Starting server...')
+    httpd.serve_forever()
+
+run()
